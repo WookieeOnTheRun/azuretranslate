@@ -1,11 +1,15 @@
 # azuretranslate
-Python script using Azure Translator to detect and translate either typed phrase or document.
+Python script using Azure Translator to detect and translate either typed phrase or document. This script is built upon the Azure provided Quickstart.
 
 This script needs the following Python packages to be loaded :
 
 pip install python-docx
+
 pip install pypdf2
+
 pip install python-magic
+
+You will also need to create an Azure Translator resource, and plug in the endpoint URL and key to use : https://docs.microsoft.com/en-us/azure/cognitive-services/translator/translator-how-to-signup
 
 The script offers the option to enter a file location and file, or type a phrase to do initial language detection.
 
