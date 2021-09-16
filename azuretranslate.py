@@ -7,8 +7,7 @@ import magic # detects file format
 from PyPDF2 import pdf # allows loading/reading of PDF files
 import docx # allows reading of MS Word files
 
-# Add your region, subscription key and endpoint
-# Region is required if using a Cognitive Services resource.
+# Add your subscription key and endpoint
 
 subscription_key = ""
 endpoint = ""
@@ -172,15 +171,7 @@ if toTranslate.upper() == "Y" or toTranslate.upper() == "YES" :
 		request = requests.post( constructed_url, headers = headers, json = body )
 		response = request.json()
 
-		# print( json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) ) )
-		jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) )
-		translateJsonObj = json.loads( jsonString )
-
-		# translatedText = translateJsonObj[ 0 ][ 0 ]
-		translatedText = translateJsonObj[ 0 ][ 0 ][ 0 ]
-
-		print( "Translated Text :" )
-		print( translatedText )
+		print( json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) ) )
 
 	else :
 
