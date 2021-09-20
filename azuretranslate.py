@@ -5,7 +5,9 @@ import json
 # import packages for document format(s)
 import magic # detects file format
 from PyPDF2 import pdf # allows loading/reading of PDF files
-import docx # allows reading of MS Word files
+import docx
+from requests.api import head
+from requests.models import Response # allows reading of MS Word files
 
 # Add your region, subscription key and endpoint
 # Region is required if using a Cognitive Services resource.
@@ -17,101 +19,6 @@ translatePath = '/translate?api-version=3.0'
 detectPath = '/detect?api-version=3.0'
 languagePath = '/languages?api-version=3.0&scope=translation'
 
-# list of characters to strip from content strings
-charList = [ "\t", "\n", "\r", "\v", "\f" ]
-
-# add logic to either translate/detect a single phrase or the contents of a document
-
-docOrPhrase = input( "Would you like to work with an existing document or enter a phrase? Enter 0 for document or 1 for phrase : " )
-
-if docOrPhrase == "0" :
-
-	docLocation = input( "Please enter the location and name of the document - currently this script only supports text, MS Word ( Docx ) and PDF : " )
-
-	fileType = magic.from_file( docLocation, mime = True )
-
-	print( "File Type : ", fileType )
-
-	if fileType == "application/pdf" :
-
-		# use PyPDF2
-
-		docText = ""
-
-		pdfToProcess = open( docLocation, "rb" )
-
-		pdfReader = pdf.PdfFileReader( pdfToProcess )
-
-		currPage = 0
-
-		# print( "Num Pages : ", pdfReader.numPages )
-
-		while currPage <= ( ( pdfReader.numPages ) - 1 ) :
-
-			pdfPage = pdfReader.getPage( currPage )
-
-			pdfText = pdfPage.extractText()
-
-			docText += pdfText
-
-			currPage += 1
-
-			# print( docText )
-
-			for char in charList :
-
-				docText = docText.replace( char, "" )
-
-		workBlock = '[{ "text" : "' + docText + '" }]'
-
-		pdfToProcess.close()
-
-	elif fileType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" :
-
-		# use docx
-
-		docToProcess = open( docLocation, "rb" )
-
-		docReader = docx.Document( docToProcess )
-
-		docText = ""
-
-		for para in docReader.paragraphs :
-
-			docText += para.text
-
-			for char in charList :
-
-				docText = docText.replace( char, "" )
-			
-		# print( docText )
-
-		workBlock = '[{ "text" : "' + docText + '" }]'
-
-		docToProcess.close()
-
-	else :
-
-		docToProcess = open( docLocation, "r" )
-
-		docText = docToProcess.read()
-
-		for char in charList :
-
-			docText = docText.replace( char, "" )
-
-			workBlock = '[{ "text" : "' + docText + '" }]'
-
-		docToProcess.close()
-
-elif docOrPhrase == "1" :
-
-	phraseToProcess = input( "Please enter a phrase you want to process : " )
-
-	workBlock = '[{ "text" : "' + phraseToProcess + '" }]'
-
-phrase = json.loads( workBlock )
-
 headers = {
 	'Ocp-Apim-Subscription-Key': subscription_key,
 	'Ocp-apim-subscription-region' : 'usgovvirginia',
@@ -119,71 +26,199 @@ headers = {
 	'X-ClientTraceId': str(uuid.uuid4())
 	}
 
-body = phrase
+###############################################################################
+# function - convert passed document to json block for use by translation api #
+###############################################################################
 
-# get list of supported languages for translation
-constructed_url = endpoint + languagePath
+def ConvertDocToJson( rawFile, rawFormat ) :
 
-# print( constructed_url )
-# print( tmpHeaders )
+    charList = [ "\t", "\n", "\r", "\v", "\f" ]
 
-# request = requests.post( constructed_url , headers = tmpHeaders, json = body )
-request = requests.get( constructed_url )
-response = request.json()
+    jsonBlock = ""
 
-jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False )
-languageDict = json.loads( jsonString )
+    docText = ""
 
-# print( type( languageDict ) )
-# print( len( languageDict ) )
+    if rawFormat == "application/pdf" :
 
-# detecting language by default - option offered to translate into supported language
-constructed_url = endpoint + detectPath
+        # pdf
 
-request = requests.post( constructed_url, headers = headers, json = body )
-response = request.json()
+        docToProcess = open( rawFile, "rb" )
 
-jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) )
-detectJsonObj = json.loads( jsonString )
+        docReader = pdf.PdfFileReader( docToProcess )
 
-detectedLanguage = detectJsonObj[ 0 ][ "language" ]
+        currPage = 0
 
-displayLanguage = languageDict[ "translation" ][ detectedLanguage ][ "name" ]
+        while currPage <= ( ( docReader.numPages ) -1 ) :
 
-toTranslate = input( "We have detected the language as " + displayLanguage + " - would you like to translate? Please enter Y or Yes to translate, N or No to end with detection : " )
+            docPage = docReader.getPage( currPage )
 
-if toTranslate.upper() == "Y" or toTranslate.upper() == "YES" :
+            currText = docPage.extractText()
 
-	print( "Please select a language to translate into from the list below: " )
+            docText += currText
 
-	for key, value in languageDict[ "translation" ].items() :
+            currPage += 1
 
-		print( "Available languages : ", key, " - ", languageDict[ "translation" ][ key ][ "name" ] )
+    elif rawFormat == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" :
 
-	desiredLanguage = input( "Please type short code for desired translation language : " )
+        # word doc
 
-	if desiredLanguage in languageDict[ "translation" ] :
+        docToProcess = open( rawFile, "rb" )
 
-		# params = "&from=en&to=es&to=fr&to=de&to=it"
-		params = "&from=" + detectedLanguage + "&to=" + desiredLanguage
+        docReader = docx.Document( docToProcess )
 
-		constructed_url = endpoint + translatePath + params
+        docToProcess.close()
 
-		request = requests.post( constructed_url, headers = headers, json = body )
-		response = request.json()
+        for para in docReader.paragraphs :
 
-		# print( json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) ) )
-		jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) )
-		translateJsonObj = json.loads( jsonString )
+            docText += para.text
 
-		translatedText = translateJsonObj[ 0 ][ "translations" ][ 0 ][ "text" ]
+    else :
 
-		print( "Translated Text : ", translatedText )
+        docToProcess = open( rawFile, "r" )
 
-	else :
+        docText = docToProcess.read()
 
-		print( "Invalid language code selected." )
+        docToProcess.close()
+
+    for char in charList :
+
+        docText = docText.replace( char, "" )
+
+    jsonBlock = '[{ "text" : "' + docText + '" }]'
+
+    workBlock = json.loads( jsonBlock )
+
+    return workBlock;
+
+################################################
+# function - displayed API supported languages #
+################################################
+
+def getSupportedLanguages( epUrl, langPath ) :
+
+    endpoint = epUrl + langPath
+
+    # print( endpoint )
+
+    request = requests.get( endpoint )
+
+    response = request.json()
+
+    jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False )
+
+    jsonLangObj = json.loads( jsonString )
+
+    global detectedLanguages
+
+    detectedLanguages = jsonLangObj[ "translation" ]
+
+    # print( detectedLanguages )
+
+    return detectedLanguages
+
+##############################################
+# function : detect json block with api call #
+##############################################
+
+def detectJsonBlock( jsonBlock, epUrl, detectPath, langPath ) :
+
+    urlEp = epUrl + detectPath
+
+    request = requests.post( urlEp, headers = headers, json = jsonBlock )
+
+    response = request.json()
+
+    jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ' ) )
+    detectJsonObj = json.loads( jsonString )
+
+    global detectedLanguage
+
+    detectedLanguage = detectJsonObj[ 0 ][ "language" ]
+
+    # pull list of supported languages to sync up display value
+
+    languageList = getSupportedLanguages( epUrl, langPath )
+
+    displayLanguage = languageList[ detectedLanguage ][ "name" ]
+
+    print( "The language has been detected as ", displayLanguage )
+
+#################################################
+# function : translate json block with api call #
+#################################################
+
+def translateJsonBlock( jsonBlock, dtcLangCode, trxLangCode, epUrl, translatePath ) :
+
+    endpoint = epUrl + translatePath + "&from=" + dtcLangCode + "&to=" + trxLangCode
+
+    request = requests.post( endpoint, headers = headers, json = jsonBlock )
+
+    response = request.json()
+
+    jsonString = json.dumps( response, sort_keys = True, ensure_ascii = False, indent = 4, separators = ( ',', ': ') )
+    translateJsonObj = json.loads( jsonString )
+
+    translatedText = translateJsonObj[ 0 ][ "translations" ][ 0 ][ "text" ]
+
+    print( "Translation : ", translatedText )
+
+#######################
+# main body of script #
+#######################
+
+toDo = input( "Enter 0 for a document or 1 if typing a phrase : " )
+
+if toDo == "0" :
+
+    # process a document
+
+    DocToProcess = input( "Please enter the location and name of file to be processed : " )
+
+    DocToProcessFmt = magic.from_file( DocToProcess, mime = True )
+
+    workBlock = ConvertDocToJson( DocToProcess, DocToProcessFmt )
+
+elif toDo == "1" :
+
+    # processs a phrase
+
+    PhraseToProcess = input( "Please type the phrase to be processed: " )
+
+    tmpBlock = '[{ "text" : "' + PhraseToProcess + '" }]'
+
+    workBlock = json.loads( tmpBlock )
 
 else :
 
-	print( "All done." )
+    print( "Invalid selection." )
+
+    quit()
+
+detectJsonBlock( workBlock, endpoint, detectPath, languagePath )
+
+toTranslate = input( "Would you like to translate the above? Type Yes or No :" )
+
+if toTranslate.upper() == "YES" or ( toTranslate.upper() ).startswith( "Y", 0, 1 ) :
+
+    for key, value in detectedLanguages.items() :
+
+        print( "Supported Language : ", key, " - ", detectedLanguages[ key ][ "name" ] )
+
+    selectTransLang = input( "Please select a language to translate selection into - use provided short code : " )
+
+    if selectTransLang in detectedLanguages :
+
+        translateJsonBlock( workBlock, detectedLanguage, selectTransLang, endpoint, translatePath )
+
+    else :
+
+        print( "Invalid Translation Language Selection." )
+
+        quit()
+
+else :
+
+    print( "Invalid operation selection." )
+
+    quit()
+
