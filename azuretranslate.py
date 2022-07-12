@@ -9,7 +9,6 @@ from requests.api import head
 from requests.models import Response # allows reading of MS Word files
 
 from azure.storage.blob import BlobServiceClient
-from sqlalchemy import BLANK_SCHEMA
 
 ##############################
 # create important variables #
